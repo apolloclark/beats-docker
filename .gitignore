@@ -7,3 +7,5 @@ snapshots
 .cache
 **/__pycache__
 .pytest_cache
+.project
+.pydevproject
