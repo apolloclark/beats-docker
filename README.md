@@ -34,14 +34,42 @@ To build images with a released version of Beats, check out the corresponding
 branch for the version, and run Make while specifying the exact version desired.
 Like this:
 ```
-git checkout 6.3
-ELASTIC_VERSION=6.3.1 make
+# configure Ubuntu 18.04 Host machine
+
+sudo ln -sfn /usr/bin/python3.6 /usr/bin/python
+
+sudo apt-get install -y python3-pip python3-flake8 python3-jinja2 python3-venv python3.6-venv python3-pyfiglet
+
+sudo apt-get autoremove -y
+
+
+
+# download project, build
+
+git checkout ubuntu16.04
+
+export BASE_OS="ubuntu"
+export BASE_OS_VER="16.04"
+
+export IMAGE_FLAVORS="full"
+export REGISTRY="apolloclark"
+export ELASTIC_VERSION="6.3.1"
+
+docker login
+
+make clean
+make
+make demo
+make push
 ```
 
 To build images with the latest nightly snapshots of Beats, run:
 ```
 make from-snapshot
 ```
+<br/><br/><br/>
+
+
 
 ## Contributing, issues and testing
 

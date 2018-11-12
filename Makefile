@@ -1,4 +1,4 @@
-SHELL=/bin/bash
+SHELL=/bin/bash -ex
 
 ifndef ELASTIC_VERSION
 export ELASTIC_VERSION := $(shell ./bin/elastic-version)
@@ -12,14 +12,15 @@ export VERSION_TAG := $(ELASTIC_VERSION)
 DOWNLOAD_URL_ROOT ?= https://artifacts.elastic.co/downloads/beats
 endif
 
-BUILD_ARTIFACT_PATH ?= beats/build/distributions
-
 BEATS := $(shell cat beats.txt)
-REGISTRY ?= docker.elastic.co
+export REGISTRY ?= docker.elastic.co
 HTTPD ?= beats-docker-artifact-server
 
+export BASE_OS ?= centos
+export BASE_OS_VER ?= 7
+HTTPD ?= beats-docker-artifact-server
 IMAGE_FLAVORS ?= oss full
-FIGLET := pyfiglet -w 160 -f puffy
+FIGLET := pyfiglet -w 160
 
 # Make sure we run local versions of everything, particularly commands
 # installed into our virtualenv with pip eg. `docker-compose`.
@@ -76,6 +77,9 @@ $(BEATS): venv
 	  -D elastic_version=$(ELASTIC_VERSION) \
 	  -D url=$(DOWNLOAD_URL_ROOT)/$@/$@-$(ELASTIC_VERSION)-linux-x86_64.tar.gz \
 	  -D image_flavor=full \
+	  -D base_os=$(BASE_OS) \
+	  -D base_os_ver=$(BASE_OS_VER) \
+	  -D image_flavor=full \
 	  templates/Dockerfile.j2 > build/$@/Dockerfile-full
 	docker build $(DOCKER_FLAGS) -f build/$@/Dockerfile-full --tag=$(REGISTRY)/beats/$@:$(VERSION_TAG) build/$@
 
@@ -83,6 +87,8 @@ $(BEATS): venv
 	  -D beat=$@ \
 	  -D elastic_version=$(ELASTIC_VERSION) \
 	  -D url=$(DOWNLOAD_URL_ROOT)/$@/$@-oss-$(ELASTIC_VERSION)-linux-x86_64.tar.gz \
+	  -D base_os=$(BASE_OS) \
+	  -D base_os_ver=$(BASE_OS_VER) \
 	  -D image_flavor=oss \
 	  templates/Dockerfile.j2 > build/$@/Dockerfile-oss
 	docker build $(DOCKER_FLAGS) -f build/$@/Dockerfile-oss --tag=$(REGISTRY)/beats/$@-oss:$(VERSION_TAG) build/$@
@@ -95,13 +101,13 @@ local-httpd:
 
 release-manager-snapshot: local-httpd
 	ELASTIC_VERSION=$(ELASTIC_VERSION)-SNAPSHOT \
-	  DOWNLOAD_URL_ROOT=http://localhost:8000/$(BUILD_ARTIFACT_PATH) \
+	  DOWNLOAD_URL_ROOT=http://localhost:8000/beats/build/upload \
 	  DOCKER_FLAGS='--network=host' \
 	  make images || (docker kill $(HTTPD); false)
 	-docker kill $(HTTPD)
 release-manager-release: local-httpd
 	ELASTIC_VERSION=$(ELASTIC_VERSION) \
-	  DOWNLOAD_URL_ROOT=http://localhost:8000/$(BUILD_ARTIFACT_PATH) \
+	  DOWNLOAD_URL_ROOT=http://localhost:8000/beats/build/upload \
 	  DOCKER_FLAGS='--network=host' \
 	  make images || (docker kill $(HTTPD); false)
 	-docker kill $(HTTPD)
@@ -110,8 +116,8 @@ release-manager-release: local-httpd
 from-snapshot:
 	rm -rf ./snapshots
 	for beat in $(BEATS); do \
-	  mkdir -p snapshots/$(BUILD_ARTIFACT_PATH)/$$beat; \
-	  (cd snapshots/$(BUILD_ARTIFACT_PATH)/$$beat && \
+	  mkdir -p snapshots/beats/build/upload/$$beat; \
+	  (cd snapshots/beats/build/upload/$$beat && \
 	  wget https://snapshots.elastic.co/downloads/beats/$$beat/$$beat-$(ELASTIC_VERSION)-SNAPSHOT-linux-x86_64.tar.gz && \
 	  wget https://snapshots.elastic.co/downloads/beats/$$beat/$$beat-oss-$(ELASTIC_VERSION)-SNAPSHOT-linux-x86_64.tar.gz); \
 	done
@@ -120,9 +126,9 @@ from-snapshot:
 # Push the images to the dedicated push endpoint at "push.docker.elastic.co"
 push: all
 	for beat in $(BEATS); do \
-	  docker tag $(REGISTRY)/beats/$$beat:$(VERSION_TAG) push.$(REGISTRY)/beats/$$beat:$(VERSION_TAG); \
-	  docker push push.$(REGISTRY)/beats/$$beat:$(VERSION_TAG); \
-	  docker rmi push.$(REGISTRY)/beats/$$beat:$(VERSION_TAG); \
+	  docker tag $(REGISTRY)/beats/$$beat:$(VERSION_TAG) $(REGISTRY)/beats:$$beat-$(VERSION_TAG); \
+	  docker push $(REGISTRY)/beats:$$beat-$(VERSION_TAG); \
+	  docker rmi $(REGISTRY)/beats:$$beat-$(VERSION_TAG); \
 	done
 
 # The tests are written in Python. Make a virtualenv to handle the dependencies.

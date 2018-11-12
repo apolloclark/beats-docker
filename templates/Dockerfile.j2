@@ -2,9 +2,9 @@
 {% set beat_home = '/usr/share/%s' % beat -%}
 {% set binary_file = '%s/%s' % (beat_home, beat) -%}
 
-FROM centos:7
+FROM {{ base_os }}:{{ base_os_ver }}
 
-RUN yum update -y && yum install -y curl && yum clean all
+RUN yum update -y && yum install -y curl
 
 RUN curl -Lso - {{ url }} | \
       tar zxf - -C /tmp && \
@@ -21,7 +21,7 @@ ADD docker-entrypoint /usr/local/bin
 
 # Provide a non-root user.
 RUN groupadd --gid 1000 {{ beat }} && \
-    useradd -M --uid 1000 --gid 1000 --home {{ beat_home }} {{ beat }}
+    useradd -M --uid 1000 --gid 1000 --home-dir {{ beat_home }} --shell /bin/bash {{ beat }}
 
 WORKDIR {{ beat_home }}
 RUN mkdir data logs && \
@@ -43,7 +43,7 @@ RUN setcap cap_net_raw=eip {{ binary_file }}
 {%- if beat == 'auditbeat' %}
 USER root
 {% else %}
-USER 1000
+USER {{ beat }}
 {% endif %}
 
 LABEL org.label-schema.schema-version="1.0" \
